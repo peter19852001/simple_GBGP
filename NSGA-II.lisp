@@ -22,7 +22,17 @@
   (n-dominating 0) ;; number of individuals dominating this one
   (dominated-by nil) ;; list of MO-IND dominated by this one
   (rank nil)
+  ;; for crowding distance
+  distance
   )
+
+;; convenience functions
+(defun mo-fitness (mo)
+  (individual-fitness (mo-ind-ind mo)))
+
+(defun mo-fitness-obj-i (mo i)
+  "i-th objective of MO-IND mo"
+  (aref (mo-fitness mo) i))
 
 ;;; fitness domination
 (defun fitness-dominate-p (fitness-dominating fitness-dominated better)
@@ -83,8 +93,30 @@ IND-DOMINATE-P is (lambda (ind-dominating ind-dominated) ...)."
     (nreverse all-fronts)))
 
 (defun crowding-distance-assignment (inds)
-  ;; TODO
-  )
+  "Calculate crowding distance assignment and will modify the
+MO-INDIVIDUALs in INDS which is a list of MO-INDIVIDUAL"
+  (let ((v-inds (coerce inds 'vector))
+        (n (length inds))
+        ;; number of objectives, use the fitness of first individual to determine
+        (n-objs (length (mo-fitness (first inds)))))
+    (dolist (i inds) (setf (mo-ind-distance i) 0))
+    (dotimes (obj n-objs)
+      (let* ((sort-by-obj
+              (sort v-inds #'< :key #'(lambda (x) (mo-fitness-obj-i x obj))))
+             (smallest-ind (aref sort-by-obj 0))
+             (largest-ind (aref sort-by-obj (- n 1)))
+             (obj-value-range (+ 1e-15
+                                 (- (mo-fitness-obj-i largest-ind obj)
+                                    (mo-fitness-obj-i smallest-ind obj)))))
+        ;; sbcl specific, for positive infinity
+        (setf (mo-ind-distance smallest-ind) SB-EXT:DOUBLE-FLOAT-POSITIVE-INFINITY
+              (mo-ind-distance largest-ind) SB-EXT:DOUBLE-FLOAT-POSITIVE-INFINITY)
+        ;;
+        (loop :for i :from 2 :below n
+             :do (incf (mo-ind-distance (aref sort-by-obj i))
+                       (/ (- (mo-fitness-obj-i (aref sort-by-obj (1+ i)) obj)
+                             (mo-fitness-obj-i (aref sort-by-obj (- i 1)) obj))
+                          obj-value-range)))))))
 
 (defun NSGA-II ()
   ;; TODO
