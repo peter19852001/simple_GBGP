@@ -118,6 +118,30 @@ MO-INDIVIDUALs in INDS which is a list of MO-INDIVIDUAL"
                              (mo-fitness-obj-i (aref sort-by-obj (- i 1)) obj))
                           obj-value-range)))))))
 
+(defun NSGA-II-next-gen-parents (pop ind-dominate-p n)
+  "POP is a vector of (more than N) INDIVIDUAL, select N INDIVIDUAL
+according to nondomination and crowding distance."
+  (let ((new-parents (make-array n))
+        (n-inds 0))
+    (do ((non-dom-inds (fast-non-dominated-sort pop ind-dominate-p) (cdr non-dom-inds)))
+        ((> (+ n-inds (length (car non-dom-inds))) n)
+         ;; the current front will fill-up, so take only as many as needed
+         ;; all the mo-inds in the front have the same rank, so sort by decreasing crowding distance
+         (do ((last-front (sort (crowding-distance-assignment (car non-dom-inds))
+                                 #'> :key #'mo-ind-distance)
+                          (cdr last-front)))
+             ((>= n-inds n))
+           (setf (aref new-parents n-inds) (car last-front))
+           (incf n-inds)))
+      ;; still not filled up yet, calculate crowding distance for later use
+      (crowding-distance-assignment (car non-dom-inds))
+      ;; put the mo-inds as new parents
+      (dolist (x (car non-dom-inds))
+        (setf (aref new-parents n-inds) x)
+        (incf n-inds)))
+    ;;
+    new-parents))
+
 (defun NSGA-II ()
   ;; TODO
   )
