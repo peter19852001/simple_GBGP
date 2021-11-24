@@ -142,6 +142,26 @@ according to nondomination and crowding distance."
     ;;
     new-parents))
 
+(defun tournament-select-one (pop)
+  "POP is a vector of MO-INDIVIDUALs already with rank and crowding
+  distance calculated, select one as potential parent through
+  tournament."
+  (let* ((n (length pop))
+         (ind-i (aref pop (random n)))
+         (ind-j (aref pop (random n))))
+    ;; prefer either lower rank, or if same rank, larger crowding distance
+    (cond ((< (mo-ind-rank ind-i)
+              (mo-ind-rank ind-j))
+           ind-i)
+          ((> (mo-ind-rank ind-i)
+              (mo-ind-rank ind-j))
+           ind-j)
+          ;; same rank
+          ((> (mo-ind-distance ind-i)
+              (mo-ind-distance ind-j))
+           ind-i)
+          (t ind-j))))
+
 (defun NSGA-II ()
   ;; TODO
   )
