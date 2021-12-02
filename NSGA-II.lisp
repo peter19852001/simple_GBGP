@@ -54,28 +54,45 @@ All FITNESS-DOMINATING, FITNESS-DOMINATED and BETTER are vectors."
        (individual-fitness ind-dominated)
        better)))
 
+(defun mo-ind-better-p (better-ind worse-ind)
+  ;; prefer either lower rank, or if same rank, larger crowding distance
+  (or (< (mo-ind-rank better-ind)
+         (mo-ind-rank worse-ind))
+      (and (= (mo-ind-rank better-ind)
+              (mo-ind-rank worse-ind))
+           (> (mo-ind-distance better-ind)
+              (mo-ind-distance worse-ind)))))
+
 ;;; 
 (defun fast-non-dominated-sort (pop ind-dominate-p)
   "Calculate the list of list of non-dominated MO-INDIVIDUAL with increasing ranks.
-POP is a vector of INDIVIDUAL.
+POP is a vector of MO-INDIVIDUAL and their ranks will be updated.
 IND-DOMINATE-P is (lambda (ind-dominating ind-dominated) ...)."
-  (let ((mo-pop (map 'list
-                     #'(lambda (x) (make-mo-ind :ind x))
-                     pop))
-        (n-inds (length pop))
+  (let ((n-inds (length pop))
         (first-front nil)
         (all-fronts nil))
-    (dolist (p mo-pop)      
-      (dolist (q mo-pop)
-        (when (funcall ind-dominate-p (mod-ind-ind p) (mo-ind-ind q))
-          ;; p dominates q
-          (push q (mo-ind-dominated-by p))
-          (incf (mo-ind-n-dominating q)))))
-    (dolist (p mo-pop)
-      (when (= 0 (mo-ind-n-dominating p))
-        ;; p belongs to the first front
-        (setf (mo-ind-rank p) 1)
-        (push p first-front)))
+    ;; first clear the auxiliary info
+    (dotimes (i pop)
+      (let ((p (aref pop i)))
+        (setf (mo-ind-n-dominating p) 0
+              (mo-ind-dominated-by p) nil
+              (mo-ind-rank p) nil)))
+    ;;
+    (dotimes (i n-inds)
+      (dotimes (j n-inds)
+        (let ((p (aref pop i))
+              (q (aref pop j)))
+          (when (funcall ind-dominate-p (mod-ind-ind p) (mo-ind-ind q))
+            ;; p dominates q
+            (push q (mo-ind-dominated-by p))
+            (incf (mo-ind-n-dominating q))))))
+    ;;
+    (dotimes (i n-inds)
+      (let ((p (aref pop i)))
+        (when (= 0 (mo-ind-n-dominating p))
+          ;; p belongs to the first front
+          (setf (mo-ind-rank p) 1)
+          (push p first-front))))
     (push first-front all-fronts)
     ;; other fronts
     (do ((cur-front nil nil)
@@ -146,22 +163,87 @@ according to nondomination and crowding distance."
   "POP is a vector of MO-INDIVIDUALs already with rank and crowding
   distance calculated, select one as potential parent through
   tournament."
-  (let* ((n (length pop))
-         (ind-i (aref pop (random n)))
-         (ind-j (aref pop (random n))))
-    ;; prefer either lower rank, or if same rank, larger crowding distance
-    (cond ((< (mo-ind-rank ind-i)
-              (mo-ind-rank ind-j))
-           ind-i)
-          ((> (mo-ind-rank ind-i)
-              (mo-ind-rank ind-j))
-           ind-j)
-          ;; same rank
-          ((> (mo-ind-distance ind-i)
-              (mo-ind-distance ind-j))
-           ind-i)
-          (t ind-j))))
+  (let ((n (length pop))
+        (ind-i (aref pop (random n)))
+        (ind-j (aref pop (random n))))
+    (if (mo-ind-better-p ind-i ind-j)
+        ind-i
+        ind-j)))
 
-(defun NSGA-II ()
-  ;; TODO
+(defun gen-offsprings (pop  (n (length pop)))
+  "POP is a vector of MO-INDIVIDUALs, generate a vector of N MO-INDIVIDUALs as offsprings"
   )
+
+(defun NSGA-II (&key (population-size 500)
+				  chr-init chr-evaluator
+				  (chr-crossoveror nil) (chr-mutator nil)
+				  chr-printer
+                  better 
+				  (p-mutation 0.05)
+                  (generations 50)
+                  (report-fitness-record nil))
+  "The simple version of NSGA-II without constraint.
+
+Refer to 
+Deb, K., Pratap, A., Agarwal, S., & Meyarivan, T. A. M. T. (2002). A fast and elitist multiobjective genetic algorithm: NSGA-II. IEEE transactions on evolutionary computation, 6(2), 182-197.
+"
+  (labels ((gen-offsprings (pop)
+             ;; pop is a vector of MO-INDIVIDUALs with rank and crowding distance
+             ;; to produce a vector of the same length of INDIVIDUALs as offsprings
+             (let* ((n (length pop))
+                    (out (make-array n)))
+               (do ((i 0 (+ i 2)))
+                   ((>= i n) out)
+                 (let* ((p1 (tournament-select-one pop))
+                        (p2 (tournament-select-one pop))
+                        ;; chr-crossoveror should produce a pair of two chromosomes
+                        (children-chrs
+                         (funcall chr-crossoveror
+                                  (individual-chromosome (mo-ind-ind p1))
+                                  (individual-chromosome (mo-ind-ind p2))))
+                        (chr1 (if (bernoulli p-mutation)
+                                  (funcall chr-mutator (car children-chrs))
+                                  (car children-chrs)))
+                        (chr2 (if (bernoulli p-mutation)
+                                  (funcall chr-mutator (cdr children-chrs))
+                                  (cdr children-chrs)))
+                        (ind1 (new-individual chr1 chr-evaluator))
+                        (ind2 (new-individual chr2 chr-evaluator)))
+                   (setf (aref out i) ind1)
+                   (when (< (+1 i) n)
+                     (setf (aref out (+1 i) ind2)))
+                   )))))
+    ;;
+    (let* ((ind-dominate-p (individual-dominator better))
+           (cur-parents
+            ;; a vector of MO-INDIVIDUALs
+            (fill-all-with (make-array population-size)
+                           (make-mo-ind :ind (new-individual
+                                              (funcal chr-init)
+                                              chr-evaluator))))
+           (non-dom-fronts (fast-non-dominated-sort cur-parents ind-dominate-p)))
+      ;; initial population's handling is a little different
+      ;; first get ranks and crowding distance for initial parents
+      (dolist (inds non-dom-fronts)
+        (crowding-distance-assignment (inds)))
+      ;;
+      (dotimes (g generations)
+        ;; next generation
+        ;; first generate offsprings
+        (let* ((offsprings (gen-offsprings cur-parents))
+               (new-pop (concatenate cur-parents offsprings)))
+          (setf cur-parents (NSGA-II-next-gen-parents
+                             new-pop
+                             ind-dominate-p
+                             population-size))))
+      ;; return the non-dominated solutions.
+
+      ;; now cur-parents has ranks but we have lost the fronts because
+      ;; we did not keep track of them, so simply loop through it to
+      ;; get the non-dominated set.
+      (let ((final-non-dom nil))
+        (dotimes (i (length cur-parents) final-non-dom)
+          (let ((p (aref cur-parents i)))
+            (when (= 0 (mo-ind-rank p))
+              (push p final-non-dom)))))
+      )))
