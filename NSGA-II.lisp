@@ -44,7 +44,7 @@ All FITNESS-DOMINATING, FITNESS-DOMINATED and BETTER are vectors."
             (v2 (aref fitness-dominated i)))
         (cond ((eql v1 v2) nil)
               ((funcall (aref better i) v1 v2)
-               (setf has-strictly-better))
+               (setf has-strictly-better t))
               (t (return nil)))))))
 
 (defun individual-dominator (better)
@@ -72,7 +72,7 @@ IND-DOMINATE-P is (lambda (ind-dominating ind-dominated) ...)."
         (first-front nil)
         (all-fronts nil))
     ;; first clear the auxiliary info
-    (dotimes (i pop)
+    (dotimes (i n-inds)
       (let ((p (aref pop i)))
         (setf (mo-ind-n-dominating p) 0
               (mo-ind-dominated-by p) nil
@@ -82,7 +82,7 @@ IND-DOMINATE-P is (lambda (ind-dominating ind-dominated) ...)."
       (dotimes (j n-inds)
         (let ((p (aref pop i))
               (q (aref pop j)))
-          (when (funcall ind-dominate-p (mod-ind-ind p) (mo-ind-ind q))
+          (when (funcall ind-dominate-p (mo-ind-ind p) (mo-ind-ind q))
             ;; p dominates q
             (push q (mo-ind-dominated-by p))
             (incf (mo-ind-n-dominating q))))))
@@ -163,16 +163,12 @@ according to nondomination and crowding distance."
   "POP is a vector of MO-INDIVIDUALs already with rank and crowding
   distance calculated, select one as potential parent through
   tournament."
-  (let ((n (length pop))
-        (ind-i (aref pop (random n)))
-        (ind-j (aref pop (random n))))
+  (let* ((n (length pop))
+         (ind-i (aref pop (random n)))
+         (ind-j (aref pop (random n))))
     (if (mo-ind-better-p ind-i ind-j)
         ind-i
         ind-j)))
-
-(defun gen-offsprings (pop  (n (length pop)))
-  "POP is a vector of MO-INDIVIDUALs, generate a vector of N MO-INDIVIDUALs as offsprings"
-  )
 
 (defun NSGA-II (&key (population-size 500)
 				  chr-init chr-evaluator
@@ -180,9 +176,18 @@ according to nondomination and crowding distance."
 				  chr-printer
                   better 
 				  (p-mutation 0.05)
-                  (generations 50)
-                  (report-fitness-record nil))
+                  (generations 50))
   "The simple version of NSGA-II without constraint.
+
+POPULATION-SIZE: population size.
+CHR-INIT: nullary function to generate a chromosome.
+CHR-EVALUATOR: unary function to evaluate a chromosome to get the fitness.
+CHR-CROSSOVEROR: binary function to crossover two chromosomes and return a pair of chromosomes.
+CHR-MUTATOR: unary function to mutate a chromosome and return a mutated chromosome.
+CHR-PRINTER: unary function to print a chromosome in a readable way.
+BETTER: a list of binary predicate to indicate what is better for each of the multiple objectives; e.g. #'< indicates an objective should be minimized.
+P-MUTATION: probability of mutation.
+GENERATIONS: number of generations.
 
 Refer to 
 Deb, K., Pratap, A., Agarwal, S., & Meyarivan, T. A. M. T. (2002). A fast and elitist multiobjective genetic algorithm: NSGA-II. IEEE transactions on evolutionary computation, 6(2), 182-197.
@@ -210,8 +215,8 @@ Deb, K., Pratap, A., Agarwal, S., & Meyarivan, T. A. M. T. (2002). A fast and el
                         (ind1 (new-individual chr1 chr-evaluator))
                         (ind2 (new-individual chr2 chr-evaluator)))
                    (setf (aref out i) ind1)
-                   (when (< (+1 i) n)
-                     (setf (aref out (+1 i) ind2)))
+                   (when (< (1+ i) n)
+                     (setf (aref out (1+ i)) ind2))
                    )))))
     ;;
     (let* ((ind-dominate-p (individual-dominator better))
@@ -219,13 +224,13 @@ Deb, K., Pratap, A., Agarwal, S., & Meyarivan, T. A. M. T. (2002). A fast and el
             ;; a vector of MO-INDIVIDUALs
             (fill-all-with (make-array population-size)
                            (make-mo-ind :ind (new-individual
-                                              (funcal chr-init)
+                                              (funcall chr-init)
                                               chr-evaluator))))
            (non-dom-fronts (fast-non-dominated-sort cur-parents ind-dominate-p)))
       ;; initial population's handling is a little different
       ;; first get ranks and crowding distance for initial parents
       (dolist (inds non-dom-fronts)
-        (crowding-distance-assignment (inds)))
+        (crowding-distance-assignment inds))
       ;;
       (dotimes (g generations)
         ;; next generation
