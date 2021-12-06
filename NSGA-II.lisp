@@ -67,6 +67,7 @@ All FITNESS-DOMINATING, FITNESS-DOMINATED and BETTER are vectors."
 (defun fast-non-dominated-sort (pop ind-dominate-p)
   "Calculate the list of list of non-dominated MO-INDIVIDUAL with increasing ranks.
 POP is a vector of MO-INDIVIDUAL and their ranks will be updated.
+The rank of the first front is 1.
 IND-DOMINATE-P is (lambda (ind-dominating ind-dominated) ...)."
   (let ((n-inds (length pop))
         (first-front nil)
@@ -105,7 +106,8 @@ IND-DOMINATE-P is (lambda (ind-dominating ind-dominated) ...)."
             (setf (mo-ind-rank q) cur-rank)
             (push q cur-front))))
       ;;
-      (push cur-front all-fronts))
+      (when cur-front
+        (push cur-front all-fronts)))
     ;;
     (nreverse all-fronts)))
 
@@ -181,11 +183,11 @@ according to nondomination and crowding distance."
 
 POPULATION-SIZE: population size.
 CHR-INIT: nullary function to generate a chromosome.
-CHR-EVALUATOR: unary function to evaluate a chromosome to get the fitness.
+CHR-EVALUATOR: unary function to evaluate a chromosome to get the fitness which is a vector of values for the objectives.
 CHR-CROSSOVEROR: binary function to crossover two chromosomes and return a pair of chromosomes.
 CHR-MUTATOR: unary function to mutate a chromosome and return a mutated chromosome.
 CHR-PRINTER: unary function to print a chromosome in a readable way.
-BETTER: a list of binary predicate to indicate what is better for each of the multiple objectives; e.g. #'< indicates an objective should be minimized.
+BETTER: a vector of binary predicate to indicate what is better for each of the multiple objectives; e.g. #'< indicates an objective should be minimized.
 P-MUTATION: probability of mutation.
 GENERATIONS: number of generations.
 
@@ -249,6 +251,6 @@ Deb, K., Pratap, A., Agarwal, S., & Meyarivan, T. A. M. T. (2002). A fast and el
       (let ((final-non-dom nil))
         (dotimes (i (length cur-parents) final-non-dom)
           (let ((p (aref cur-parents i)))
-            (when (= 0 (mo-ind-rank p))
+            (when (= 1 (mo-ind-rank p))
               (push p final-non-dom)))))
       )))
