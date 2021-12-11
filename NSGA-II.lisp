@@ -131,7 +131,7 @@ MO-INDIVIDUALs in INDS which is a list of MO-INDIVIDUAL"
         (setf (mo-ind-distance smallest-ind) SB-EXT:DOUBLE-FLOAT-POSITIVE-INFINITY
               (mo-ind-distance largest-ind) SB-EXT:DOUBLE-FLOAT-POSITIVE-INFINITY)
         ;;
-        (loop :for i :from 2 :below n
+        (loop :for i :from 1 :below (- n 1)
              :do (incf (mo-ind-distance (aref sort-by-obj i))
                        (/ (- (mo-fitness-obj-i (aref sort-by-obj (1+ i)) obj)
                              (mo-fitness-obj-i (aref sort-by-obj (- i 1)) obj))
