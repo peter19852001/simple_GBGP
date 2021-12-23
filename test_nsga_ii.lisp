@@ -12,14 +12,46 @@
 ;; Deb, Kalyanmoy, and Ram Bhushan Agrawal. "Simulated binary
 ;; crossover for continuous search space." Complex systems 9.2 (1995):
 ;; 115-148.
+;;
+;; But follow and adapt the code from https://gist.github.com/Tiagoperes/1779d5f1c89bae0cfdb87b1960bba36d
+;;
+;; found from this post: https://stackoverflow.com/a/40087950
+
+(defparameter *eta-c* 1.0)
+
+(defun sbx-one-var (x1 x2 xL xU)
+  "Simulated Crossover of two real values X1 and X2, and the lower bound is xL, upper bound is xU.
+*ETA-C* is the distribution index for the crossover
+Returns the two children values."
+  (if (<= (abs (- x1 x2)) 1.0e-14)
+      ;; if the two number are the same, no crossover needed
+      (values x1 x2)
+      (let* ((y1 (min x1 x2))
+             (y2 (max x1 x2))
+             (r (random 1.0)))
+        (flet ((one-child (beta)
+                 (let* ((alpha (- 2.0 (expt beta (- (+ 1.0 *eta-c*)))))
+                        (betaq (expt (if (<= r (/ 1.0 alpha))
+                                         (* r alpha)
+                                         (/ 1.0 (- 2.0 (* r alpha))))
+                                     (/ 1.0 (+ 1.0 *eta-c*)))))
+                   (* 0.5 (- (+ y1 y2)
+                             (* betaq (- y2 y1))))
+                   )))
+          (values
+           ;; two different beta for the two children, otherwise they
+           ;; are the same, and share the same r.
+           (one-child (+ 1.0 (/ (* 2.0 (- y1 xL))
+                                (- y2 y1))))
+           (one-child (+ 1.0 (/ (* 2.0 (- xU y2))
+                                (- y2 y1))))))
+      )))
 
 ;;;;;;;;
 ;; SCH
 ;; chromosome is one real value in [-10^3, 10^3]
 (defun sch-chr-init ()
   (- (random 2000.0) 1000.0))
-
-(defun )
 
 (defun sch-fitness (chr)
   "chr is just one real value x.
