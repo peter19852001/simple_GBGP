@@ -13,15 +13,33 @@
 ;; crossover for continuous search space." Complex systems 9.2 (1995):
 ;; 115-148.
 ;;
-;; But follow and adapt the code from https://gist.github.com/Tiagoperes/1779d5f1c89bae0cfdb87b1960bba36d
+;; But follow and adapt the code from https://gist.github.com/Tiagoperes/1779d5f1c89bae0cfdb87b1960bba36d for the bound version.
 ;;
 ;; found from this post: https://stackoverflow.com/a/40087950
+;;
+;;
+;; For unbound version, follows the formulae in the paper:
+;; 
+;; Deb, Kalyanmoy, and Hans-Georg Beyer. "Self-adaptive genetic
+;; algorithms with simulated binary crossover." Evolutionary
+;; computation 9.2 (2001): 197-221.
 
-(defparameter *eta-c* 1.0)
+;; For mutation, NSGA-II paper mentions polynomial operator, but seems to give the wrong citation, so search and found mentioning of polynomial mutation operator for real-coded GA in:
+;;
+;; Deb, Kalyanmoy, and Debayan Deb. "Analysing mutation schemes for
+;; real-parameter genetic algorithms." International Journal of
+;; Artificial Intelligence and Soft Computing 4.1 (2014): 1-28.
+;;
+;; which listed the formula proposed in an earlier paper.
 
-(defun sbx-one-var (x1 x2 xL xU)
-  "Simulated Crossover of two real values X1 and X2, and the lower bound is xL, upper bound is xU.
-*ETA-C* is the distribution index for the crossover
+(defparameter *eta-c* 20.0
+  "Distribution index of Simulated Binary Crossover operator used in NSGA-II paper.")
+(defparameter *eta-m* 20.0
+  "Distribution index of Simulated Binary Mutation operator used in NSGA-II paper.")
+
+(defun sbx-one-var (x1 x2 xL xU eta-c)
+  "Simulated Crossover of two real values X1 and X2, and the lower bound is XL, upper bound is XU.
+ETA-C is the distribution index for the crossover.
 Returns the two children values."
   (if (<= (abs (- x1 x2)) 1.0e-14)
       ;; if the two number are the same, no crossover needed
@@ -30,11 +48,11 @@ Returns the two children values."
              (y2 (max x1 x2))
              (r (random 1.0)))
         (flet ((one-child (beta)
-                 (let* ((alpha (- 2.0 (expt beta (- (+ 1.0 *eta-c*)))))
+                 (let* ((alpha (- 2.0 (expt beta (- (+ 1.0 eta-c)))))
                         (betaq (expt (if (<= r (/ 1.0 alpha))
                                          (* r alpha)
                                          (/ 1.0 (- 2.0 (* r alpha))))
-                                     (/ 1.0 (+ 1.0 *eta-c*)))))
+                                     (/ 1.0 (+ 1.0 eta-c)))))
                    (* 0.5 (- (+ y1 y2)
                              (* betaq (- y2 y1))))
                    )))
@@ -47,6 +65,59 @@ Returns the two children values."
                                 (- y2 y1))))))
       )))
 
+(defun sbx-one-var-b (x1 x2 eta)
+  "Simulated Binary Crossover for real values X1 and X2 without bounds.
+ETA is the distribution index.
+Returns two values as children."
+  (let* ((u (random 1.0))
+         (betaq (expt
+                 (if (<= u 0.5)
+                     (* 2.0 u)
+                     (/ 1.0 (* 2.0 (- 1.0 u))))
+                 (/ 1.0 (+ 1.0 eta))))
+         (a (+ 1.0 betaq))
+         (b (- 1.0 betaq)))
+    (values
+     ;; child 1
+     (* 0.5 (+ (* a x1) (* b x2)))
+     ;; child 2
+     (* 0.5 (+ (* b x1) (* a x2))))))
+
+(defun sbx-vars (x1 x2 xL xU eta-c)
+  "Simulated Crossover of two real vectors X1 and X2 of the same length, and the lower bound vector is XL, upper bound vector is XU.
+ETA-C is the distribution index for the crossover.
+Returns the two children values as a pair of vectors."
+  (let* ((n (length x1))
+         (c1 (make-array n))
+         (c2 (make-array n)))
+    (dotimes (i n)
+      (let ((p1 (aref x1 i))
+            (p2 (aref x2 i)))
+        (if (<= (random 1.0) 0.5)
+            ;; crossover
+            (multiple-value-bind (y1 y2)
+                (sbx-one-var p1 p2 (aref xL i) (aref xU i) eta-c)
+              (setf (aref c1 i) y1
+                    (aref c2 i) y2))
+            ;; just copy from parent
+            (setf (aref c1 i) p1
+                  (aref c2 i) p2))))
+    (cons c1 c2)))
+
+(defun poly-mutation-one-var (p xL xU eta)
+  "Polynomial Mutation Operator for Real-Coded GA, for real value P, where XL and XU are the lower and upper bounds respectively. ETA is the distribution index."
+  (let ((u (random 1.0)))
+    (if (<= u 0.5)
+        ;;
+        (+ p (* (- (expt (* 2.0 u)
+                         (/ 1.0 (+ 1.0 eta)))
+                   1.0)
+                (- p xL)))
+        ;;
+        (+ p (* (- 1.0
+                   (expt (* 2.0 (- 1.0 u))
+                         (/ 1.0 (+ 1.0 eta))))
+                (- xU p))))))
 ;;;;;;;;
 ;; SCH
 ;; chromosome is one real value in [-10^3, 10^3]
@@ -61,6 +132,12 @@ f2(x) = (x-2)^2"
   (vector (expt chr 2)
           (expt (- chr 2) 2)))
 
+(defun sch-chr-crossover (chr1 chr2)
+  "CHR1 and CHR2 are real values."
+  (multiple-value-bind (c1 c2)
+      (sbx-one-var chr1 chr2
+                   -1000.0 1000.0 *eta-c*)
+    (cons c1 c2)))
 ;;;;;;;;
 ;; KUR
 ;; chromosome is a real vector of length 3 in [-5, 5]
@@ -83,6 +160,14 @@ f2(x) = \sum_{i=1}^{n-1}(|x_i|^0.8 + 5sin{x_i^3}"
         :sum (+ (expt (abs (aref chr i)) 0.8)
                 (* 5 (sin (expt (aref chr i) 3)))))))
 
+(defparameter *kur-xL* #(-5.0 -5.0 -5.0))
+(defparameter *kur-xU* #(5.0 5.0 5.0))
+
+(defun kur-chr-crossover (chr1 chr2)
+  "CHR1 and CHR2 are real vectors of length 3."
+  (sbx-vars chr1 chr2
+            *kur-xL* *kur-xU*
+            *eta-c*))
 ;;;;;;;;
 ;; ZDT2
 ;; chromosome is a real vector of length 30 in [0,1]
@@ -107,6 +192,14 @@ g(x) = 1 + 9(\sum_{i=2}^n x_i)/(n-1)"
                                2)))))
     ))
 
+(defparameter *zdt2-xL* (make-array 30 :initial-element 0.0))
+(defparameter *zdt2-xU* (make-array 30 :initial-element 1.0))
+
+(defun *zdt2-chr-crossover (chr1 chr2)
+  "CHR1 and CHR2 are real vectors of length 30."
+  (sbx-vars chr1 chr2
+            *zdt2-xL* *zdt2-xU*
+            *eta-c*))
 ;;;;;;;;
 ;; ZDT4
 ;; chromosome is a real vector of length 10, where x_1 is in [0,1], others are in [-5,5]
@@ -133,3 +226,18 @@ g(x) = 1 + 10(n-1) + \sum_{i=2}^n [x_i^2 - 10cos(4\pi x_i)]"
               (* gx (- 1 (sqrt (/ (aref chr 0)
                                   gx))))))
     ))
+
+(defparameter *zdt4-xL*
+  (let ((v (make-array 10 :initial-element -5.0)))
+    (setf (aref v 0) 0.0)
+    v))
+(defparameter *zdt4-xU*
+  (let ((v (make-array 10 :initial-element 5.0)))
+    (setf (aref v 0) 1.0)
+    v))
+
+(defun *zdt4-chr-crossover (chr1 chr2)
+  "CHR1 and CHR2 are real vectors of length 30."
+  (sbx-vars chr1 chr2
+            *zdt4-xL* *zdt4-xU*
+            *eta-c*))
