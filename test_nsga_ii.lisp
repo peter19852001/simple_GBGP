@@ -17,6 +17,8 @@
 ;;
 ;; found from this post: https://stackoverflow.com/a/40087950
 ;;
+;; But we do not use the bounded version here.
+;;
 ;;
 ;; For unbound version, follows the formulae in the paper:
 ;; 
@@ -37,7 +39,7 @@
 (defparameter *eta-m* 20.0
   "Distribution index of Simulated Binary Mutation operator used in NSGA-II paper.")
 
-(defun sbx-one-var (x1 x2 xL xU eta-c)
+(defun sbx-one-var-b (x1 x2 xL xU eta-c)
   "Simulated Crossover of two real values X1 and X2, and the lower bound is XL, upper bound is XU.
 ETA-C is the distribution index for the crossover.
 Returns the two children values."
@@ -65,7 +67,7 @@ Returns the two children values."
                                 (- y2 y1))))))
       )))
 
-(defun sbx-one-var-b (x1 x2 eta)
+(defun sbx-one-var-ub (x1 x2 eta)
   "Simulated Binary Crossover for real values X1 and X2 without bounds.
 ETA is the distribution index.
 Returns two values as children."
@@ -83,7 +85,7 @@ Returns two values as children."
      ;; child 2
      (* 0.5 (+ (* b x1) (* a x2))))))
 
-(defun sbx-vars (x1 x2 xL xU eta-c)
+(defun sbx-vars-b (x1 x2 xL xU eta-c)
   "Simulated Crossover of two real vectors X1 and X2 of the same length, and the lower bound vector is XL, upper bound vector is XU.
 ETA-C is the distribution index for the crossover.
 Returns the two children values as a pair of vectors."
@@ -96,7 +98,7 @@ Returns the two children values as a pair of vectors."
         (if (<= (random 1.0) 0.5)
             ;; crossover
             (multiple-value-bind (y1 y2)
-                (sbx-one-var p1 p2 (aref xL i) (aref xU i) eta-c)
+                (sbx-one-var-b p1 p2 (aref xL i) (aref xU i) eta-c)
               (setf (aref c1 i) y1
                     (aref c2 i) y2))
             ;; just copy from parent
@@ -104,7 +106,28 @@ Returns the two children values as a pair of vectors."
                   (aref c2 i) p2))))
     (cons c1 c2)))
 
-(defun poly-mutation-one-var (p xL xU eta)
+(defun sbx-vars-ub (x1 x2 eta-c)
+  "Simulated Crossover of two real vectors X1 and X2 of the same length, the unbounded version.
+ETA-C is the distribution index for the crossover.
+Returns the two children values as a pair of vectors."
+  (let* ((n (length x1))
+         (c1 (make-array n))
+         (c2 (make-array n)))
+    (dotimes (i n)
+      (let ((p1 (aref x1 i))
+            (p2 (aref x2 i)))
+        (if (<= (random 1.0) 0.5)
+            ;; crossover
+            (multiple-value-bind (y1 y2)
+                (sbx-one-var-ub p1 p2 eta-c)
+              (setf (aref c1 i) y1
+                    (aref c2 i) y2))
+            ;; just copy from parent
+            (setf (aref c1 i) p1
+                  (aref c2 i) p2))))
+    (cons c1 c2)))
+
+(defun poly-mutate-one-var (p xL xU eta)
   "Polynomial Mutation Operator for Real-Coded GA, for real value P, where XL and XU are the lower and upper bounds respectively. ETA is the distribution index."
   (let ((u (random 1.0)))
     (if (<= u 0.5)
@@ -118,6 +141,25 @@ Returns the two children values as a pair of vectors."
                    (expt (* 2.0 (- 1.0 u))
                          (/ 1.0 (+ 1.0 eta))))
                 (- xU p))))))
+
+(defun poly-mutate-vars (x xL xU eta pm)
+  "Polynomial Mutation Operator for Real-Coded GA applied to real vector X, where XL and XI are the lower and upper bounds respectively. ETA is the distribution index.
+Use a simple schemme of mutating each entry of X independently with a probability of PM."
+  ;; use explicit loop for simplicity
+  (let* ((n (length x))
+         (v (make-array n)))
+    (dotimes (i n v)
+      (setf (aref v i)
+            (if (<= (random 1.0) pm)
+                ;; mutate
+                (poly-mutate-one-var
+                 (aref x i)
+                 (aref xL i)
+                 (aref xU i)
+                 eta)
+                ;; just copy
+                (aref x i))))))
+
 ;;;;;;;;
 ;; SCH
 ;; chromosome is one real value in [-10^3, 10^3]
@@ -135,8 +177,8 @@ f2(x) = (x-2)^2"
 (defun sch-chr-crossover (chr1 chr2)
   "CHR1 and CHR2 are real values."
   (multiple-value-bind (c1 c2)
-      (sbx-one-var chr1 chr2
-                   -1000.0 1000.0 *eta-c*)
+      (sbx-one-var-ub chr1 chr2
+                      -1000.0 1000.0 *eta-c*)
     (cons c1 c2)))
 ;;;;;;;;
 ;; KUR
@@ -165,9 +207,8 @@ f2(x) = \sum_{i=1}^{n-1}(|x_i|^0.8 + 5sin{x_i^3}"
 
 (defun kur-chr-crossover (chr1 chr2)
   "CHR1 and CHR2 are real vectors of length 3."
-  (sbx-vars chr1 chr2
-            *kur-xL* *kur-xU*
-            *eta-c*))
+  (sbx-vars-ub chr1 chr2
+               *eta-c*))
 ;;;;;;;;
 ;; ZDT2
 ;; chromosome is a real vector of length 30 in [0,1]
@@ -197,9 +238,8 @@ g(x) = 1 + 9(\sum_{i=2}^n x_i)/(n-1)"
 
 (defun *zdt2-chr-crossover (chr1 chr2)
   "CHR1 and CHR2 are real vectors of length 30."
-  (sbx-vars chr1 chr2
-            *zdt2-xL* *zdt2-xU*
-            *eta-c*))
+  (sbx-vars-ub chr1 chr2
+               *eta-c*))
 ;;;;;;;;
 ;; ZDT4
 ;; chromosome is a real vector of length 10, where x_1 is in [0,1], others are in [-5,5]
@@ -238,6 +278,5 @@ g(x) = 1 + 10(n-1) + \sum_{i=2}^n [x_i^2 - 10cos(4\pi x_i)]"
 
 (defun *zdt4-chr-crossover (chr1 chr2)
   "CHR1 and CHR2 are real vectors of length 30."
-  (sbx-vars chr1 chr2
-            *zdt4-xL* *zdt4-xU*
-            *eta-c*))
+  (sbx-vars-ub chr1 chr2
+               *eta-c*))
