@@ -142,12 +142,13 @@ Returns the two children values as a pair of vectors."
                          (/ 1.0 (+ 1.0 eta))))
                 (- xU p))))))
 
-(defun poly-mutate-vars (x xL xU eta pm)
+(defun poly-mutate-vars (x xL xU eta &optional pm)
   "Polynomial Mutation Operator for Real-Coded GA applied to real vector X, where XL and XI are the lower and upper bounds respectively. ETA is the distribution index.
 Use a simple schemme of mutating each entry of X independently with a probability of PM."
   ;; use explicit loop for simplicity
   (let* ((n (length x))
          (v (make-array n)))
+    (if (null pm) (setf pm (/ 1.0 n)))
     (dotimes (i n v)
       (setf (aref v i)
             (if (<= (random 1.0) pm)
@@ -159,6 +160,8 @@ Use a simple schemme of mutating each entry of X independently with a probabilit
                  eta)
                 ;; just copy
                 (aref x i))))))
+
+;;;;
 
 ;;;;;;;;
 ;; SCH
@@ -178,8 +181,29 @@ f2(x) = (x-2)^2"
   "CHR1 and CHR2 are real values."
   (multiple-value-bind (c1 c2)
       (sbx-one-var-ub chr1 chr2
-                      -1000.0 1000.0 *eta-c*)
+                      *eta-c*)
     (cons c1 c2)))
+
+(defun sch-chr-mutate (chr)
+  (poly-mutate-one-var chr
+                       -1000.0 1000.0
+                       *eta-m*))
+
+(defparameter *sch-better* (vector #'< #'<))
+
+(defparameter *sch-fronts*
+  (NSGA-II :population-size 100
+           :chr-init #'sch-chr-init
+           :chr-evaluator #'sch-fitness
+           :chr-crossoveror #'sch-chr-crossover
+           :chr-mutator #'sch-chr-mutate
+           :better *sch-better*
+           :p-mutation 1.0
+           :generations 250))
+
+(output-pareto-front-fitness-to-csv-file *sch-fronts* "sch-test-fronts.csv")
+;; the plot of fitness (using R) looks similar to that shown in the paper.
+
 ;;;;;;;;
 ;; KUR
 ;; chromosome is a real vector of length 3 in [-5, 5]
@@ -209,6 +233,11 @@ f2(x) = \sum_{i=1}^{n-1}(|x_i|^0.8 + 5sin{x_i^3}"
   "CHR1 and CHR2 are real vectors of length 3."
   (sbx-vars-ub chr1 chr2
                *eta-c*))
+
+(defun kur-chr-mutate (chr)
+  (poly-mutate-vars chr
+                    *kur-xL* *kur-xU*
+                    *eta-m*))
 ;;;;;;;;
 ;; ZDT2
 ;; chromosome is a real vector of length 30 in [0,1]
@@ -236,10 +265,15 @@ g(x) = 1 + 9(\sum_{i=2}^n x_i)/(n-1)"
 (defparameter *zdt2-xL* (make-array 30 :initial-element 0.0))
 (defparameter *zdt2-xU* (make-array 30 :initial-element 1.0))
 
-(defun *zdt2-chr-crossover (chr1 chr2)
+(defun zdt2-chr-crossover (chr1 chr2)
   "CHR1 and CHR2 are real vectors of length 30."
   (sbx-vars-ub chr1 chr2
                *eta-c*))
+
+(defun zdt2-chr-mutate (chr)
+  (poly-mutate-vars chr
+                    *zdt2-xL* *zdt2-xU*
+                    *eta-m*))
 ;;;;;;;;
 ;; ZDT4
 ;; chromosome is a real vector of length 10, where x_1 is in [0,1], others are in [-5,5]
@@ -276,7 +310,12 @@ g(x) = 1 + 10(n-1) + \sum_{i=2}^n [x_i^2 - 10cos(4\pi x_i)]"
     (setf (aref v 0) 1.0)
     v))
 
-(defun *zdt4-chr-crossover (chr1 chr2)
+(defun zdt4-chr-crossover (chr1 chr2)
   "CHR1 and CHR2 are real vectors of length 30."
   (sbx-vars-ub chr1 chr2
                *eta-c*))
+
+(defun zdt4-chr-mutate (chr)
+  (poly-mutate-vars chr
+                    *zdt4-xL* *zdt4-xU*
+                    *eta-m*))

@@ -42,7 +42,10 @@ All FITNESS-DOMINATING, FITNESS-DOMINATED and BETTER are vectors."
     (dotimes (i (length better) has-strictly-better)
       (let ((v1 (aref fitness-dominating i))
             (v2 (aref fitness-dominated i)))
-        (cond ((eql v1 v2) nil)
+        (cond ((or (not (numberp v1))
+                   (not (numberp v2)))
+               (return nil))
+              ((eql v1 v2) nil)
               ((funcall (aref better i) v1 v2)
                (setf has-strictly-better t))
               (t (return nil)))))))
@@ -63,12 +66,19 @@ All FITNESS-DOMINATING, FITNESS-DOMINATED and BETTER are vectors."
            (> (mo-ind-distance better-ind)
               (mo-ind-distance worse-ind)))))
 
+(defun population-summary (pop)
+  "POP is a vector of MO-INDIVIDUALs, print their fitness and chrosome."
+  (dotimes (i (length pop))
+    (format t "~A: ~A~%"
+            i (mo-ind-ind (aref pop i)))))
 ;;; 
 (defun fast-non-dominated-sort (pop ind-dominate-p)
   "Calculate the list of list of non-dominated MO-INDIVIDUAL with increasing ranks.
 POP is a vector of MO-INDIVIDUAL and their ranks will be updated.
 The rank of the first front is 1.
 IND-DOMINATE-P is (lambda (ind-dominating ind-dominated) ...)."
+  ;;(format t "At fast-non-dominated-sort~%")
+  ;;(population-summary pop)
   (let ((n-inds (length pop))
         (first-front nil)
         (all-fronts nil))
@@ -140,13 +150,16 @@ MO-INDIVIDUALs in INDS which is a list of MO-INDIVIDUAL"
 (defun NSGA-II-next-gen-parents (pop ind-dominate-p n)
   "POP is a vector of (more than N) INDIVIDUAL, select N INDIVIDUAL
 according to nondomination and crowding distance."
+  ;;(format t "At NSGA-II-next-gen-parents~%")
+  ;;(population-summary pop)
   (let ((new-parents (make-array n))
         (n-inds 0))
     (do ((non-dom-inds (fast-non-dominated-sort pop ind-dominate-p) (cdr non-dom-inds)))
         ((> (+ n-inds (length (car non-dom-inds))) n)
          ;; the current front will fill-up, so take only as many as needed
          ;; all the mo-inds in the front have the same rank, so sort by decreasing crowding distance
-         (do ((last-front (sort (crowding-distance-assignment (car non-dom-inds))
+         (crowding-distance-assignment (car non-dom-inds))
+         (do ((last-front (sort (car non-dom-inds)
                                  #'> :key #'mo-ind-distance)
                           (cdr last-front)))
              ((>= n-inds n))
@@ -175,7 +188,7 @@ according to nondomination and crowding distance."
 (defun NSGA-II (&key (population-size 500)
 				  chr-init chr-evaluator
 				  (chr-crossoveror nil) (chr-mutator nil)
-				  chr-printer
+				  ;; chr-printer
                   better 
 				  (p-mutation 0.05)
                   (generations 50))
@@ -196,7 +209,7 @@ Deb, K., Pratap, A., Agarwal, S., & Meyarivan, T. A. M. T. (2002). A fast and el
 "
   (labels ((gen-offsprings (pop)
              ;; pop is a vector of MO-INDIVIDUALs with rank and crowding distance
-             ;; to produce a vector of the same length of INDIVIDUALs as offsprings
+             ;; to produce a vector of the same length of MO-INDIVIDUALs as offsprings
              (let* ((n (length pop))
                     (out (make-array n)))
                (do ((i 0 (+ i 2)))
@@ -216,9 +229,11 @@ Deb, K., Pratap, A., Agarwal, S., & Meyarivan, T. A. M. T. (2002). A fast and el
                                   (cdr children-chrs)))
                         (ind1 (new-individual chr1 chr-evaluator))
                         (ind2 (new-individual chr2 chr-evaluator)))
-                   (setf (aref out i) ind1)
+                   (setf (aref out i)
+                         (make-mo-ind :ind ind1))
                    (when (< (1+ i) n)
-                     (setf (aref out (1+ i)) ind2))
+                     (setf (aref out (1+ i))
+                           (make-mo-ind :ind ind2)))
                    )))))
     ;;
     (let* ((ind-dominate-p (individual-dominator better))
@@ -236,9 +251,11 @@ Deb, K., Pratap, A., Agarwal, S., & Meyarivan, T. A. M. T. (2002). A fast and el
       ;;
       (dotimes (g generations)
         ;; next generation
+        (format t "Generation ~A~%" g)
         ;; first generate offsprings
         (let* ((offsprings (gen-offsprings cur-parents))
-               (new-pop (concatenate cur-parents offsprings)))
+               (new-pop (concatenate 'vector
+                                     cur-parents offsprings)))
           (setf cur-parents (NSGA-II-next-gen-parents
                              new-pop
                              ind-dominate-p
@@ -254,3 +271,26 @@ Deb, K., Pratap, A., Agarwal, S., & Meyarivan, T. A. M. T. (2002). A fast and el
             (when (= 1 (mo-ind-rank p))
               (push p final-non-dom)))))
       )))
+
+(defun output-pareto-front-fitness-as-csv (inds)
+  (format t "individual")
+  (let ((n-objs (length (mo-fitness (first inds)))))
+    (dotimes (j n-objs)
+      (format t ",objective~A" j))
+    (terpri)
+    ;;
+    (flet ((print-fitnesses (fitness)
+             (dotimes (j (length fitness))
+               (format t ",~A" (aref fitness j)))))
+      (do ((i 0 (1+ i))
+           (ds inds (cdr ds)))
+          ((null ds))
+        (format t "~A" i)
+        (print-fitnesses (mo-fitness (car ds)))
+        (terpri)))))
+
+(defun output-pareto-front-fitness-to-csv-file (inds out-file)
+  (with-open-file (*standard-output* out-file
+                                     :direction :output
+                                     :if-exists :supersede)
+    (output-pareto-front-fitness-as-csv inds)))
