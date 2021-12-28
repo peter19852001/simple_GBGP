@@ -57,15 +57,21 @@ Returns the two children values."
                                      (/ 1.0 (+ 1.0 eta-c)))))
                    (* 0.5 (- (+ y1 y2)
                              (* betaq (- y2 y1))))
-                   )))
+                   ))
+               (clip-to-range (z)
+                 (cond ((< z xL) xL)
+                       ((> z xU) xU)
+                       (t z))))
           (values
            ;; two different beta for the two children, otherwise they
            ;; are the same, and share the same r.
-           (one-child (+ 1.0 (/ (* 2.0 (- y1 xL))
-                                (- y2 y1))))
-           (one-child (+ 1.0 (/ (* 2.0 (- xU y2))
-                                (- y2 y1))))))
-      )))
+           (clip-to-range
+            (one-child (+ 1.0 (/ (* 2.0 (- y1 xL))
+                                 (- y2 y1)))))
+           (clip-to-range
+            (one-child (+ 1.0 (/ (* 2.0 (- xU y2))
+                                 (- y2 y1)))))))
+        )))
 
 (defun sbx-one-var-ub (x1 x2 eta)
   "Simulated Binary Crossover for real values X1 and X2 without bounds.
@@ -129,18 +135,22 @@ Returns the two children values as a pair of vectors."
 
 (defun poly-mutate-one-var (p xL xU eta)
   "Polynomial Mutation Operator for Real-Coded GA, for real value P, where XL and XU are the lower and upper bounds respectively. ETA is the distribution index."
-  (let ((u (random 1.0)))
-    (if (<= u 0.5)
-        ;;
-        (+ p (* (- (expt (* 2.0 u)
-                         (/ 1.0 (+ 1.0 eta)))
-                   1.0)
-                (- p xL)))
-        ;;
-        (+ p (* (- 1.0
-                   (expt (* 2.0 (- 1.0 u))
-                         (/ 1.0 (+ 1.0 eta))))
-                (- xU p))))))
+  (let* ((u (random 1.0))
+         (child (if (<= u 0.5)
+                    ;;
+                    (+ p (* (- (expt (* 2.0 u)
+                                     (/ 1.0 (+ 1.0 eta)))
+                               1.0)
+                            (- p xL)))
+                    ;;
+                    (+ p (* (- 1.0
+                               (expt (* 2.0 (- 1.0 u))
+                                     (/ 1.0 (+ 1.0 eta))))
+                            (- xU p))))))
+    ;; clip to range
+    (cond ((< child xL) xL)
+          ((> child xU) xU)
+          (t child))))
 
 (defun poly-mutate-vars (x xL xU eta &optional pm)
   "Polynomial Mutation Operator for Real-Coded GA applied to real vector X, where XL and XI are the lower and upper bounds respectively. ETA is the distribution index.
@@ -238,6 +248,22 @@ f2(x) = \sum_{i=1}^{n-1}(|x_i|^0.8 + 5sin{x_i^3}"
   (poly-mutate-vars chr
                     *kur-xL* *kur-xU*
                     *eta-m*))
+
+(defparameter *kur-better* (vector #'< #'<))
+
+(defparameter *kur-fronts*
+  (NSGA-II :population-size 100
+           :chr-init #'kur-chr-init
+           :chr-evaluator #'kur-fitness
+           :chr-crossoveror #'kur-chr-crossover
+           :chr-mutator #'kur-chr-mutate
+           :better *kur-better*
+           :p-mutation (/ 1.0 3.0)
+           :generations 250))
+
+(output-pareto-front-fitness-to-csv-file *kur-fronts* "kur-test-fronts.csv")
+;; the plot of fitness (using R) looks similar to that shown in the paper.
+
 ;;;;;;;;
 ;; ZDT2
 ;; chromosome is a real vector of length 30 in [0,1]
@@ -252,14 +278,14 @@ f2(x) = g(x)[1 - (x_1 / g(x))^2]
 g(x) = 1 + 9(\sum_{i=2}^n x_i)/(n-1)"
   (flet ((g (x)
            (let ((n (length x)))
-             (+ 1 (/ (* 9 (loop :for i :from 1 :below n
-                               :sum (aref x i)))
-                     (- n 1))))))
+             (+ 1.0 (/ (* 9.0 (loop :for i :from 1 :below n
+                                 :sum (aref x i)))
+                       (- n 1))))))
     (vector (aref chr 0)
             (let ((gx (g chr)))
-              (* gx (- 1 (expt (/ (aref chr 0)
-                                  gx)
-                               2)))))
+              (* gx (- 1.0 (expt (/ (aref chr 0)
+                                    gx)
+                                 2)))))
     ))
 
 (defparameter *zdt2-xL* (make-array 30 :initial-element 0.0))
@@ -267,13 +293,34 @@ g(x) = 1 + 9(\sum_{i=2}^n x_i)/(n-1)"
 
 (defun zdt2-chr-crossover (chr1 chr2)
   "CHR1 and CHR2 are real vectors of length 30."
-  (sbx-vars-ub chr1 chr2
-               *eta-c*))
+  (sbx-vars-b chr1 chr2
+              *zdt2-xL* *zdt2-xU*
+              *eta-c*))
 
 (defun zdt2-chr-mutate (chr)
   (poly-mutate-vars chr
                     *zdt2-xL* *zdt2-xU*
                     *eta-m*))
+
+(defparameter *zdt2-better* (vector #'< #'<))
+
+(defparameter *zdt2-fronts*
+  (NSGA-II :population-size 100
+           :chr-init #'zdt2-chr-init
+           :chr-evaluator #'zdt2-fitness
+           :chr-crossoveror #'zdt2-chr-crossover
+           :chr-mutator #'zdt2-chr-mutate
+           :better *zdt2-better*
+           :p-mutation (/ 1.0 30.0)
+           :generations 2500))
+
+(output-pareto-front-fitness-to-csv-file *zdt2-fronts* "zdt2-test-fronts.csv")
+;; the plot of fitness (using R) is not quite the same as the plot in
+;; the paper, maybe the crossover and mutation operators are not
+;; exactly the same.
+
+;; seems zdt2 is binary-coded in the paper, that may explain the discrepancies of results.
+
 ;;;;;;;;
 ;; ZDT4
 ;; chromosome is a real vector of length 10, where x_1 is in [0,1], others are in [-5,5]
@@ -312,10 +359,28 @@ g(x) = 1 + 10(n-1) + \sum_{i=2}^n [x_i^2 - 10cos(4\pi x_i)]"
 
 (defun zdt4-chr-crossover (chr1 chr2)
   "CHR1 and CHR2 are real vectors of length 30."
-  (sbx-vars-ub chr1 chr2
-               *eta-c*))
+  (sbx-vars-b chr1 chr2
+              *zdt4-xL* *zdt4-xU*
+              *eta-c*))
 
 (defun zdt4-chr-mutate (chr)
   (poly-mutate-vars chr
                     *zdt4-xL* *zdt4-xU*
                     *eta-m*))
+
+(defparameter *zdt4-better* (vector #'< #'<))
+
+(defparameter *zdt4-fronts*
+  (NSGA-II :population-size 100
+           :chr-init #'zdt4-chr-init
+           :chr-evaluator #'zdt4-fitness
+           :chr-crossoveror #'zdt4-chr-crossover
+           :chr-mutator #'zdt4-chr-mutate
+           :better *zdt4-better*
+           :p-mutation 0.1
+           :generations 2500))
+
+(output-pareto-front-fitness-to-csv-file *zdt4-fronts* "zdt4-test-fronts.csv")
+;; the plot of fitness (using R) is not quite the same as that in the
+;; paper, maybe because the crossover and mutation operators are
+;; exactly the same.
