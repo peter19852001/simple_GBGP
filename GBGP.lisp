@@ -57,9 +57,9 @@ min-height: minimum parse tree height that can be produced by this non-terminal.
 (defmethod print-object ((object non-terminal) stream)
   (print-unreadable-object (object stream :type t)
     (format stream "~a :n-rules ~d :min-height ~d"
-	    (non-terminal-name object)
-	    (length (non-terminal-rules object))
-	    (non-terminal-min-height object))))
+            (non-terminal-name object)
+            (length (non-terminal-rules object))
+            (non-terminal-min-height object))))
 
 (defstruct rule
   "One alternative for a non-terminal.
@@ -93,25 +93,25 @@ action: binary function of the rule object, and the list of children objects for
 ;;;
 (defun rule-alternatives (r)
   (let ((body (cddr r))
-	(res nil))
+        (res nil))
     (loop
-	 (let ((next (position :or body)))
-	   (unless next
-	     (push body res)
-	     (return (nreverse res)))
-	   (push (subseq body 0 next) res)
-	   (setf body (nthcdr (1+ next) body))))))
+      (let ((next (position :or body)))
+        (unless next
+          (push body res)
+          (return (nreverse res)))
+        (push (subseq body 0 next) res)
+        (setf body (nthcdr (1+ next) body))))))
 (defun expand-grammar-short-hands (g)
   "Expand :or and :> for external grammar g, and returns the expanded form of the external grammar."
   (let ((res nil))
     (dolist (r g (nreverse res))
       (let ((nt (first r))
-	    (default-action (if (eql (second r) :>) #'collect-leaf #'collect-list)))
-	(dolist (a (rule-alternatives r))
-	  (push `(,nt -> ,@(if (find :action a)
-			       a
-			       (append a (list :action default-action))))
-		res))))))
+            (default-action (if (eql (second r) :>) #'collect-leaf #'collect-list)))
+        (dolist (a (rule-alternatives r))
+          (push `(,nt -> ,@(if (find :action a)
+                               a
+                               (append a (list :action default-action))))
+                res))))))
 ;;;
 (defun grammar-non-terminals (G)
   "Gives the list of non-terminals of internal grammar G."
@@ -122,55 +122,55 @@ action: binary function of the rule object, and the list of children objects for
   "Calculate the minimum heights of each non-terminals and each alternative of each non-terminals of the internal grammar G.
 Modify G to fill in the min-height fields in the process.
 Returns the possibly modified grammar G."
-  ; use a naive algorithm to iterative go through all alternatives to determine the minimum heights, until there are no further updates.
+  ;; use a naive algorithm to iterative go through all alternatives to determine the minimum heights, until there are no further updates.
   (let ((updatedp nil)
-	(ns (grammar-non-terminals G)))
-    ; temporarily for the min-height:
-    ; 0 means unknown yet.
-    ; >0 means min-height known and fully resolved.
-    ; note that a min-height of h can be determined in h iterations
+        (ns (grammar-non-terminals G)))
+    ;; temporarily for the min-height:
+    ;; 0 means unknown yet.
+    ;; >0 means min-height known and fully resolved.
+    ;; note that a min-height of h can be determined in h iterations
     (labels ((calc-rule-min-height! (r)
-	       ; update the min-height of rule r, and return the min-height, if the min-heights of
-	       ; all its non-terminals in the body is known. Otherwise return 0.
-	       (if (zerop (rule-min-height r))
-		   (let ((mh 0)
-			 (fail? nil)
-			 (has-non-terminal? nil))
-		     (do ((L (rule-body r) (cdr L)))
-			 ((or (null L) fail?)
-			  (cond (fail? 0)
-				(has-non-terminal?
-				 (setf updatedp t)
-				 (setf (rule-min-height r) (1+ mh)))
-				(t
-				 (setf updatedp t)
-				 (setf (rule-min-height r) 1))))
-		       ;
-		       (when (non-terminal-p (car L))
-			 (setf has-non-terminal? t)
-			 (let ((h (non-terminal-min-height (car L))))
-			   (if (zerop h)
-			       (setf fail? t)
-			       (setf mh (max mh h)))))))
-		   (rule-min-height r)))
-	     (calc-non-terminal-min-height! (n)
-	       ; update the min-height of non-terminal r, and return the min-height if known.
-	       ; If the min-height is known, but some alternatives still not resolved, then
-	       ; put the min-height to be negative of the min-height.
-	       (let ((mh 0))
-		 (dolist (r (non-terminal-rules n))
-		   (let ((x (calc-rule-min-height! r)))
-		     (if (plusp x)
-			 (setf mh (if (zerop mh) x (min x mh))))))
-		 (when (/= mh (non-terminal-min-height n)) ; different
-		   (setf updatedp t)
-		   (setf (non-terminal-min-height n) mh)))))
+               ;; update the min-height of rule r, and return the min-height, if the min-heights of
+               ;; all its non-terminals in the body is known. Otherwise return 0.
+               (if (zerop (rule-min-height r))
+                   (let ((mh 0)
+                         (fail? nil)
+                         (has-non-terminal? nil))
+                     (do ((L (rule-body r) (cdr L)))
+                         ((or (null L) fail?)
+                          (cond (fail? 0)
+                                (has-non-terminal?
+                                 (setf updatedp t)
+                                 (setf (rule-min-height r) (1+ mh)))
+                                (t
+                                 (setf updatedp t)
+                                 (setf (rule-min-height r) 1))))
+                                        ;
+                       (when (non-terminal-p (car L))
+                         (setf has-non-terminal? t)
+                         (let ((h (non-terminal-min-height (car L))))
+                           (if (zerop h)
+                               (setf fail? t)
+                               (setf mh (max mh h)))))))
+                   (rule-min-height r)))
+             (calc-non-terminal-min-height! (n)
+               ;; update the min-height of non-terminal r, and return the min-height if known.
+               ;; If the min-height is known, but some alternatives still not resolved, then
+               ;; put the min-height to be negative of the min-height.
+               (let ((mh 0))
+                 (dolist (r (non-terminal-rules n))
+                   (let ((x (calc-rule-min-height! r)))
+                     (if (plusp x)
+                         (setf mh (if (zerop mh) x (min x mh))))))
+                 (when (/= mh (non-terminal-min-height n)) ; different
+                   (setf updatedp t)
+                   (setf (non-terminal-min-height n) mh)))))
       ;; now iterate, until no changes can be made
       (loop
-	 (setf updatedp nil)
-	 (dolist (n ns)
-	   (calc-non-terminal-min-height! n))
-	 (when (not updatedp) (return)))
+        (setf updatedp nil)
+        (dolist (n ns)
+          (calc-non-terminal-min-height! n))
+        (when (not updatedp) (return)))
       ;; done
       G)))
 
@@ -178,37 +178,37 @@ Returns the possibly modified grammar G."
   "Converts grammar into internal form: a hash table (symbol of non-terminals as keys) of non-terminals."
   ;; a hash table using the non-terminals as keys, and the value is the vector of grammar rules for that non-terminal
   (let* ((g (expand-grammar-short-hands ext-g))
-	 (tab (make-hash-table :test #'eq))
-	 (heads (grammar-heads g)))
+         (tab (make-hash-table :test #'eq))
+         (heads (grammar-heads g)))
     (labels ((new-non-terminal (s)
-	       (or (gethash s tab)
-		   (setf (gethash s tab) (make-non-terminal :name s :rules nil :min-height 0))))
-	     (new-term (s)
-	       (if (member s heads)
-		   (new-non-terminal s)
-		   s))
-	     (new-rule (n L act)
-	       ; L is list of terminal or non-terminal, for only the rule
-	       ; act is the action
-	       (make-rule :head n
-			  :body (mapcar #'new-term L)
-			  :min-height 0
-			  :action act)))
+               (or (gethash s tab)
+                   (setf (gethash s tab) (make-non-terminal :name s :rules nil :min-height 0))))
+             (new-term (s)
+               (if (member s heads)
+                   (new-non-terminal s)
+                   s))
+             (new-rule (n L act)
+               ;; L is list of terminal or non-terminal, for only the rule
+               ;; act is the action
+               (make-rule :head n
+                          :body (mapcar #'new-term L)
+                          :min-height 0
+                          :action act)))
       (dolist (r g)
-	(let* ((n (new-non-terminal (car r)))
-	       (pos (position :action (cddr r)))
-	       (rule-ns (if pos
-			    (subseq (cddr r) 0 pos)
-			    (cddr r)))
-	       (act (if pos (nth (1+ pos) (cddr r)) nil)))
-	  (push (new-rule n rule-ns act)
-		(non-terminal-rules n))))
-      ; now get the min-heights right, and sort and convert the rules
+        (let* ((n (new-non-terminal (car r)))
+               (pos (position :action (cddr r)))
+               (rule-ns (if pos
+                            (subseq (cddr r) 0 pos)
+                            (cddr r)))
+               (act (if pos (nth (1+ pos) (cddr r)) nil)))
+          (push (new-rule n rule-ns act)
+                (non-terminal-rules n))))
+      ;; now get the min-heights right, and sort and convert the rules
       (maphash #'(lambda (k v)
-		   (declare (ignore k))
-		   (setf (non-terminal-rules v)
-			 (coerce (sort (non-terminal-rules v) #'< :key #'rule-min-height) 'vector)))
-	       (calc-grammar-min-heights! tab))
+                   (declare (ignore k))
+                   (setf (non-terminal-rules v)
+                         (coerce (sort (non-terminal-rules v) #'< :key #'rule-min-height) 'vector)))
+               (calc-grammar-min-heights! tab))
       tab)))
 
 ;;
@@ -234,13 +234,13 @@ children is a list of tree-node for the non-terminals, and the terminals of the 
 (defun expand-non-terminals (L expand-f)
   "L is a list of terminals (anything not non-terminal) and non-terminals (the structure). Expand only those non-terminals with expand-f, and leave the terminals unchanged, and return the list of expanded results."
   (cond ((null L) nil)
-	((non-terminal-p (car L)) (cons (funcall expand-f (car L)) (expand-non-terminals (cdr L) expand-f)))
-	(t (cons (car L) (expand-non-terminals (cdr L) expand-f)))))
+        ((non-terminal-p (car L)) (cons (funcall expand-f (car L)) (expand-non-terminals (cdr L) expand-f)))
+        (t (cons (car L) (expand-non-terminals (cdr L) expand-f)))))
 (defun random-expand-non-terminal (n)
   "Expand the non-terminal n, until it becomes a parse tree of terminals.
 This is dangerous, as no limit to the depth of tree of enforced, so this may cause stackoverflow."
   (let* ((rs (non-terminal-rules n))
-	 (r (svref rs (random (length rs)))))
+         (r (svref rs (random (length rs)))))
     (make-tree-node
      :rule r
      :children (expand-non-terminals (rule-body r) #'random-expand-non-terminal))))
@@ -270,15 +270,15 @@ This is dangerous, as no limit to the depth of tree of enforced, so this may cau
   (funcall f tree)
   (dolist (c (tree-node-children tree))
     (if (tree-node-p c)
-	(for-each-tree-node f c))))
+        (for-each-tree-node f c))))
 (defun for-each-tree-node-depth (f tree)
   "Call the binary function f on each of the nodes of tree-node tree and descendants and its depth, in no guaranteed order.
 The root is considered to have depth 0."
   (labels ((traverse (n d)
-	     (funcall f n d)
-	     (dolist (c (tree-node-children n))
-	       (if (tree-node-p c)
-		   (traverse c (1+ d))))))
+             (funcall f n d)
+             (dolist (c (tree-node-children n))
+               (if (tree-node-p c)
+                   (traverse c (1+ d))))))
     (traverse tree 0)))
 (defun parse-tree-nodes (tree)
   "Gives the list of tree-nodes in the parse-tree tree.
@@ -294,21 +294,21 @@ Note that tree-nodes correspond to non-terminals."
   ;; also considered writing to an adjustable vector (which can be pre-allocated), but keep to this simpler method in fear of premature optimization.
   (let ((ns '()))
     (for-each-tree-node-depth #'(lambda (z d)
-				  (if (<= (+ d (min-height-of-tree-node z)) max-height)
-				      (push (cons z d) ns)))
-			      tree)
+                                  (if (<= (+ d (min-height-of-tree-node z)) max-height)
+                                      (push (cons z d) ns)))
+                              tree)
     ns))
 (defun parse-tree-nodes-height (tree)
   "Gives the list of pair of tree-nodes with its height. Leaf is considered to have height 1."
   (let ((ns nil))
     (labels ((traverse (n)
-	       ;; traverse the children of n, and itself, and return its height
-	       (let ((h 1))
-		 (dolist (c (tree-node-children n))
-		   (if (tree-node-p c)
-		       (setf h (max h (1+ (traverse c))))))
-		 (push (cons n h) ns)
-		 h)))
+               ;; traverse the children of n, and itself, and return its height
+               (let ((h 1))
+                 (dolist (c (tree-node-children n))
+                   (if (tree-node-p c)
+                       (setf h (max h (1+ (traverse c))))))
+                 (push (cons n h) ns)
+                 h)))
       (traverse tree)
       ns)))
 (defun count-parse-tree-nodes (tree)
@@ -319,9 +319,9 @@ Note that tree-nodes correspond to non-terminals."
   "Gives the list of tree-nodes corresponding to non-terminal n in the parse-tree tree."
   (let ((ns '()))
     (for-each-tree-node #'(lambda (z)
-			    (if (eq n (rule-head (tree-node-rule z)))
-				(push z ns)))
-			tree)
+                            (if (eq n (rule-head (tree-node-rule z)))
+                                (push z ns)))
+                        tree)
     ns))
 
 (defun parse-tree-sub-node (tree n1 n2)
@@ -331,22 +331,22 @@ Note that tree-nodes correspond to non-terminals."
       (make-tree-node
        :rule (tree-node-rule tree)
        :children (mapcar #'(lambda (z)
-			     (if (tree-node-p z)
-				 (parse-tree-sub-node z n1 n2)
-				 z))
-			 (tree-node-children tree)))))
+                             (if (tree-node-p z)
+                                 (parse-tree-sub-node z n1 n2)
+                                 z))
+                         (tree-node-children tree)))))
 ;;;
 (defun genotype-to-phenotype (tree)
   "Use the actions of each tree-node (if non-nil) to recursively construct the phenotype of the parse tree.
 If no action is given for the rule, the tree-node itself is returned."
   (let ((act (or (rule-action (tree-node-rule tree))
-		 #'collect-list)))
+                 #'collect-list)))
     (funcall act
-	     (tree-node-rule tree)
-	     (mapcar #'(lambda (c) (if (tree-node-p c)
-				       (genotype-to-phenotype c)
-				       c))
-		     (tree-node-children tree)))))
+             (tree-node-rule tree)
+             (mapcar #'(lambda (c) (if (tree-node-p c)
+                                       (genotype-to-phenotype c)
+                                       c))
+                     (tree-node-children tree)))))
 ;;
 (defparameter *max-parse-tree-height* 10)
 ;;
@@ -356,75 +356,75 @@ If no action is given for the rule, the tree-node itself is returned."
 Note that t1 and t2 should be generated from the same instance of internal grammar, so that the same non-terminal are the same object instance.
 If after *crossover-try-max* times of trying, and still cannot randomly pick a non-terminal in t1 that occurs in t2, then returns t1 unchanged."
   (let* ((ns (parse-tree-nodes t1))
-	 (L (length ns)))
+         (L (length ns)))
     (do ((i *crossover-try-max* (1- i)))
-	((<= i 0) t1)
+        ((<= i 0) t1)
       (let* ((n1 (nth (random L) ns))
-	     (nt1 (rule-head (tree-node-rule n1)))
-	     (ns2 (parse-tree-nodes-for-non-terminal t2 nt1))
-	     (n2 (if (null ns2) nil (nth (random (length ns2)) ns2))))
-	(if n2 (return (parse-tree-sub-node t1 n1 n2)))))))
+             (nt1 (rule-head (tree-node-rule n1)))
+             (ns2 (parse-tree-nodes-for-non-terminal t2 nt1))
+             (n2 (if (null ns2) nil (nth (random (length ns2)) ns2))))
+        (if n2 (return (parse-tree-sub-node t1 n1 n2)))))))
 (defun uniform-filter-pick (lst test)
   "Among those items in lst that satify the unary function test, uniformly pick one. Use an online method, so need not create a temporary list, but will use more random numbers. Gives nil if no item satify the condition."
   (let ((r nil)
-	(k 1))
+        (k 1))
     (dolist (c lst r)
       (when (funcall test c)
-	(if (or (= k 1) (= (random k) 1))
-	    (setf r c))
-	(incf k)))))
+        (if (or (= k 1) (= (random k) 1))
+            (setf r c))
+        (incf k)))))
 (defun crossover-2-parse-trees-depth (t1 t2)
   "Crossover two parse trees (tree-node) t1 and t2 by randomly picking a tree-node (for non-terminal) in t1, and randomly picking a tree-node for the same non-terminal in t2, and return a copy of t1 with the chosen node replaced with that from t2.
 Note that t1 and t2 should be generated from the same instance of internal grammar, so that the same non-terminal are the same object instance.
 If after *crossover-try-max* times of trying, and still cannot randomly pick a non-terminal in t1 that occurs in t2, then returns t1 unchanged.
 Will try to maintain that the tree depth does not exceed *max-parse-tree-height*"
   (let* ((ns1 (parse-tree-nodes-depth t1 *max-parse-tree-height*)) ; ((node . depth) ...)
-	 (ns2 (parse-tree-nodes-height t2)) ; ((node . height) ...)
-	 (L (length ns1)))
+         (ns2 (parse-tree-nodes-height t2)) ; ((node . height) ...)
+         (L (length ns1)))
     (if (null ns1)
-	t1
-	(do ((i *crossover-try-max* (1- i)))
-	    ((<= i 0) t1)
-	  (let* ((nr (nth (random L) ns1)) ; nr is (node . depth)
-		 (n1 (car nr))
-		 (d1 (cdr nr))
-		 (nt1 (rule-head (tree-node-rule n1)))
-		 (n2 (car (uniform-filter-pick ns2 #'(lambda (z) (and (eq (rule-head (tree-node-rule (car z))) nt1)
-								      (<= (+ d1 (cdr z)) *max-parse-tree-height*)))))))
-	    (if n2 (return (parse-tree-sub-node t1 n1 n2))))))))
+        t1
+        (do ((i *crossover-try-max* (1- i)))
+            ((<= i 0) t1)
+          (let* ((nr (nth (random L) ns1)) ; nr is (node . depth)
+                 (n1 (car nr))
+                 (d1 (cdr nr))
+                 (nt1 (rule-head (tree-node-rule n1)))
+                 (n2 (car (uniform-filter-pick ns2 #'(lambda (z) (and (eq (rule-head (tree-node-rule (car z))) nt1)
+                                                                      (<= (+ d1 (cdr z)) *max-parse-tree-height*)))))))
+            (if n2 (return (parse-tree-sub-node t1 n1 n2))))))))
 ;;
-; the maximum height of random subtree, but will use the min-height of the non-terminal being replaced if it is larger.
+                                        ; the maximum height of random subtree, but will use the min-height of the non-terminal being replaced if it is larger.
 (defparameter *mutation-max-height* 5)
 (defun mutate-parse-tree (tree)
   "Randomly pick a tree-node from the parse tree, and replace it with a random subtree from the same non-terminal."
   (let* ((ns (parse-tree-nodes tree))
-	 (n (nth (random (length ns)) ns)) ; random tree-node
-	 (nt (rule-head (tree-node-rule n))) ; the non-terminal
-	 (new-n (limit-expand-non-terminal nt (max *mutation-max-height* (non-terminal-min-height nt)))))
+         (n (nth (random (length ns)) ns)) ; random tree-node
+         (nt (rule-head (tree-node-rule n))) ; the non-terminal
+         (new-n (limit-expand-non-terminal nt (max *mutation-max-height* (non-terminal-min-height nt)))))
     (parse-tree-sub-node tree n new-n)))
 (defun mutate-parse-tree-depth (tree)
   "Randomly pick a tree-node from the parse tree, and replace it with a random subtree from the same non-terminal.
 Will try to maintain that the tree depth does not exceed *max-parse-tree-height*"
   (let* ((ns (parse-tree-nodes-depth tree *max-parse-tree-height*))
-	 (nr (if (null ns)
-		 (cons tree 0)
-		 (nth (random (length ns)) ns))) ; random (tree-node . depth)
-	 (n (car nr))
-	 (d (cdr nr))
-	 (nt (rule-head (tree-node-rule n))) ; the non-terminal
-	 (new-n (limit-expand-non-terminal nt (max (min *mutation-max-height*
-							(- *max-parse-tree-height* d))
-						   (non-terminal-min-height nt)))))
+         (nr (if (null ns)
+                 (cons tree 0)
+                 (nth (random (length ns)) ns))) ; random (tree-node . depth)
+         (n (car nr))
+         (d (cdr nr))
+         (nt (rule-head (tree-node-rule n))) ; the non-terminal
+         (new-n (limit-expand-non-terminal nt (max (min *mutation-max-height*
+                                                        (- *max-parse-tree-height* d))
+                                                   (non-terminal-min-height nt)))))
     (parse-tree-sub-node tree n new-n)))
 ;;
 ;;;
 ;; Copied and modified from generational-elitism-EC to use GBGP
 ;; This can be a simple template for further customization.
 (defun steady-state-elitism-GBGP (internal-grammar start-symbol evaluator
-				  &key (population-size 500) (p-crossover 0.9) (p-mutation 0.05)
-				  (generations 50) (init-max-height 5) (max-tree-height 10)
-				    (max-evals nil) (optimum nil) (stop-at-optimum nil)
-				  (better-score #'>) (report-fitness-record nil))
+                                  &key (population-size 500) (p-crossover 0.9) (p-mutation 0.05)
+                                    (generations 50) (init-max-height 5) (max-tree-height 10)
+                                    (max-evals nil) (optimum nil) (stop-at-optimum nil)
+                                    (better-score #'>) (report-fitness-record nil))
   ;; evaluator should give a fitness of a chromosome
   ;; (better-score a b) says score a given by evaluator is better than score b
   ;; also record the fitness changes
@@ -432,84 +432,84 @@ Will try to maintain that the tree depth does not exceed *max-parse-tree-height*
   ;; returns the best found (phenotype), best found (genotype), number of evaluations used, and the last generation
   (let ((n-evals 0))
     (labels ((random-parse-tree ()
-	       (limit-expand-non-terminal-from-grammar internal-grammar start-symbol init-max-height))
-	     (tree-evaluator (chr)
-	       (incf n-evals)
-	       (cons (funcall evaluator chr)
-		     (count-parse-tree-nodes chr)))
-	     (better-fitness (ind1 ind2)
-	       ;; individual ind1 better than ind2
-	       ;; here the fitnesses are (score . tree-size)
-	       (let ((f1 (individual-fitness ind1))
-		     (f2 (individual-fitness ind2)))
-		 (or (funcall better-score (car f1) (car f2))
-		     (and (not (funcall better-score (car f2) (car f1)))
-			  (< (cdr f1) (cdr f2))))))
-	     (better-individual (ind1 ind2)
-	       (if (better-fitness ind1 ind2) ind1 ind2))
-	     (ind-crossoveror (ind1 ind2)
-	       (new-individual (crossover-2-parse-trees-depth (individual-chromosome ind1)
-							      (individual-chromosome ind2))
-			       #'tree-evaluator))
-	     (ind-mutator (ind)
-	       (new-individual (mutate-parse-tree-depth (individual-chromosome ind))
-			       #'tree-evaluator)))
+               (limit-expand-non-terminal-from-grammar internal-grammar start-symbol init-max-height))
+             (tree-evaluator (chr)
+               (incf n-evals)
+               (cons (funcall evaluator chr)
+                     (count-parse-tree-nodes chr)))
+             (better-fitness (ind1 ind2)
+               ;; individual ind1 better than ind2
+               ;; here the fitnesses are (score . tree-size)
+               (let ((f1 (individual-fitness ind1))
+                     (f2 (individual-fitness ind2)))
+                 (or (funcall better-score (car f1) (car f2))
+                     (and (not (funcall better-score (car f2) (car f1)))
+                          (< (cdr f1) (cdr f2))))))
+             (better-individual (ind1 ind2)
+               (if (better-fitness ind1 ind2) ind1 ind2))
+             (ind-crossoveror (ind1 ind2)
+               (new-individual (crossover-2-parse-trees-depth (individual-chromosome ind1)
+                                                              (individual-chromosome ind2))
+                               #'tree-evaluator))
+             (ind-mutator (ind)
+               (new-individual (mutate-parse-tree-depth (individual-chromosome ind))
+                               #'tree-evaluator)))
       (let* ((*max-parse-tree-height* max-tree-height)
-	     (*mutation-max-height* max-tree-height)
-	     (n-crossover (ceiling (* population-size p-crossover)))
-	     (n-mutation (ceiling (* population-size p-mutation)))
-	     (n-reproduction (max 0 (- population-size n-crossover n-mutation 1)))
-	     (cur-pop (fill-all-with (make-array population-size)
-			(new-individual (random-parse-tree) #'tree-evaluator)))
-	     (best-so-far (best-of cur-pop #'better-fitness))
-	     (next-pop (make-array population-size :initial-element nil))
-	     (selector (new-2tournament-selector #'better-individual))
-	     (crossoveror (if report-fitness-record
-			      (add-fitness-record-crossover #'ind-crossoveror)
-			      #'ind-crossoveror))
-	     (mutator (if report-fitness-record
-			  (add-fitness-record-mutation #'ind-mutator)
-			  #'ind-mutator)))
-	;;
-	(dotimes (g generations)
-	  ;; next generation
-	  (let ((sel (tournament-prepare cur-pop))
-		(cur-best (best-of cur-pop #'better-fitness)))
-	    (fill-with next-pop
-	      (1 cur-best)
-	      (n-crossover (funcall crossoveror (funcall selector sel) (funcall selector sel)))
-	      (n-mutation (funcall mutator (funcall selector sel)))
-	      (n-reproduction (funcall selector sel)))
-	    ;; sort by fitness
-	    (sort next-pop #'better-fitness)
-	    ;; report
-	    (if (better-fitness cur-best best-so-far) (setf best-so-far cur-best))
-	    (format t "===Generation ~d ===~%" (1+ g))
-	    (format t "~%best-so-far: fitness: ~a " (individual-fitness best-so-far))
-	    (princ (genotype-to-phenotype (individual-chromosome best-so-far)))
-	    (terpri)
-	    ;; fitness record
-	    (when report-fitness-record
-	      (report-fitness-changes (1+ g))))
-	  ;; terminate early
-	  (when (or (and max-evals (>= n-evals max-evals))
-		    (and stop-at-optimum
-			 (equal optimum (car (individual-fitness best-so-far)))))
-	    (return))
-	  ;;
-	  (let ((tmp cur-pop))
-	    (setf cur-pop next-pop)
-	    (setf next-pop tmp)))
-	;;
-	(values (genotype-to-phenotype (individual-chromosome best-so-far)) best-so-far n-evals cur-pop)))))
+             (*mutation-max-height* max-tree-height)
+             (n-crossover (ceiling (* population-size p-crossover)))
+             (n-mutation (ceiling (* population-size p-mutation)))
+             (n-reproduction (max 0 (- population-size n-crossover n-mutation 1)))
+             (cur-pop (fill-all-with (make-array population-size)
+                                     (new-individual (random-parse-tree) #'tree-evaluator)))
+             (best-so-far (best-of cur-pop #'better-fitness))
+             (next-pop (make-array population-size :initial-element nil))
+             (selector (new-2tournament-selector #'better-individual))
+             (crossoveror (if report-fitness-record
+                              (add-fitness-record-crossover #'ind-crossoveror)
+                              #'ind-crossoveror))
+             (mutator (if report-fitness-record
+                          (add-fitness-record-mutation #'ind-mutator)
+                          #'ind-mutator)))
+        ;;
+        (dotimes (g generations)
+          ;; next generation
+          (let ((sel (tournament-prepare cur-pop))
+                (cur-best (best-of cur-pop #'better-fitness)))
+            (fill-with next-pop
+                       (1 cur-best)
+                       (n-crossover (funcall crossoveror (funcall selector sel) (funcall selector sel)))
+                       (n-mutation (funcall mutator (funcall selector sel)))
+                       (n-reproduction (funcall selector sel)))
+            ;; sort by fitness
+            (sort next-pop #'better-fitness)
+            ;; report
+            (if (better-fitness cur-best best-so-far) (setf best-so-far cur-best))
+            (format t "===Generation ~d ===~%" (1+ g))
+            (format t "~%best-so-far: fitness: ~a " (individual-fitness best-so-far))
+            (princ (genotype-to-phenotype (individual-chromosome best-so-far)))
+            (terpri)
+            ;; fitness record
+            (when report-fitness-record
+              (report-fitness-changes (1+ g))))
+          ;; terminate early
+          (when (or (and max-evals (>= n-evals max-evals))
+                    (and stop-at-optimum
+                         (equal optimum (car (individual-fitness best-so-far)))))
+            (return))
+          ;;
+          (let ((tmp cur-pop))
+            (setf cur-pop next-pop)
+            (setf next-pop tmp)))
+        ;;
+        (values (genotype-to-phenotype (individual-chromosome best-so-far)) best-so-far n-evals cur-pop)))))
 
 ;;;
 ;;; without using tree size in selection
 (defun steady-state-elitism-plain-GBGP (internal-grammar start-symbol evaluator
-					&key (population-size 500) (p-crossover 0.9) (p-mutation 0.05)
-					  (generations 50) (init-max-height 5) (max-tree-height 10)
-					  (max-evals nil) (optimum nil) (stop-at-optimum nil)
-					  (better-score #'>) (report-fitness-record nil))
+                                        &key (population-size 500) (p-crossover 0.9) (p-mutation 0.05)
+                                          (generations 50) (init-max-height 5) (max-tree-height 10)
+                                          (max-evals nil) (optimum nil) (stop-at-optimum nil)
+                                          (better-score #'>) (report-fitness-record nil))
   ;; evaluator should give a fitness of a chromosome
   ;; (better-score a b) says score a given by evaluator is better than score b
   ;; also record the fitness changes
@@ -517,72 +517,72 @@ Will try to maintain that the tree depth does not exceed *max-parse-tree-height*
   ;; returns the best found (phenotype), best found (genotype), number of evaluations used, and the last generation
   (let ((n-evals 0))
     (labels ((random-parse-tree ()
-	       (limit-expand-non-terminal-from-grammar internal-grammar start-symbol init-max-height))
-	     (tree-evaluator (chr)
-	       (incf n-evals)
-	       (funcall evaluator chr))
-	     (better-fitness (ind1 ind2)
-	       ;; individual ind1 better than ind2
-	       ;; here the fitnesses are (score . tree-size)
-	       (let ((f1 (individual-fitness ind1))
-		     (f2 (individual-fitness ind2)))
-		 (funcall better-score f1 f2)))
-	     (better-individual (ind1 ind2)
-	       (if (better-fitness ind1 ind2) ind1 ind2))
-	     (ind-crossoveror (ind1 ind2)
-	       (new-individual (crossover-2-parse-trees-depth (individual-chromosome ind1)
-							      (individual-chromosome ind2))
-			       #'tree-evaluator))
-	     (ind-mutator (ind)
-	       (new-individual (mutate-parse-tree-depth (individual-chromosome ind))
-			       #'tree-evaluator)))
+               (limit-expand-non-terminal-from-grammar internal-grammar start-symbol init-max-height))
+             (tree-evaluator (chr)
+               (incf n-evals)
+               (funcall evaluator chr))
+             (better-fitness (ind1 ind2)
+               ;; individual ind1 better than ind2
+               ;; here the fitnesses are (score . tree-size)
+               (let ((f1 (individual-fitness ind1))
+                     (f2 (individual-fitness ind2)))
+                 (funcall better-score f1 f2)))
+             (better-individual (ind1 ind2)
+               (if (better-fitness ind1 ind2) ind1 ind2))
+             (ind-crossoveror (ind1 ind2)
+               (new-individual (crossover-2-parse-trees-depth (individual-chromosome ind1)
+                                                              (individual-chromosome ind2))
+                               #'tree-evaluator))
+             (ind-mutator (ind)
+               (new-individual (mutate-parse-tree-depth (individual-chromosome ind))
+                               #'tree-evaluator)))
       (let* ((*max-parse-tree-height* max-tree-height)
-	     (*mutation-max-height* max-tree-height)
-	     (n-crossover (ceiling (* population-size p-crossover)))
-	     (n-mutation (ceiling (* population-size p-mutation)))
-	     (n-reproduction (max 0 (- population-size n-crossover n-mutation 1)))
-	     (cur-pop (fill-all-with (make-array population-size)
-			(new-individual (random-parse-tree) #'tree-evaluator)))
-	     (best-so-far (best-of cur-pop #'better-fitness))
-	     (next-pop (make-array population-size :initial-element nil))
-	     (selector (new-2tournament-selector #'better-individual))
-	     (crossoveror (if report-fitness-record
-			      (add-fitness-record-crossover #'ind-crossoveror)
-			      #'ind-crossoveror))
-	     (mutator (if report-fitness-record
-			  (add-fitness-record-mutation #'ind-mutator)
-			  #'ind-mutator)))
-	;;
-	(dotimes (g generations)
-	  ;; next generation
-	  (let ((sel (tournament-prepare cur-pop))
-		(cur-best (best-of cur-pop #'better-fitness)))
-	    (fill-with next-pop
-	      (1 cur-best)
-	      (n-crossover (funcall crossoveror (funcall selector sel) (funcall selector sel)))
-	      (n-mutation (funcall mutator (funcall selector sel)))
-	      (n-reproduction (funcall selector sel)))
-	    ;; sort by fitness
-	    (sort next-pop #'better-fitness)
-	    ;; report
-	    (if (better-fitness cur-best best-so-far) (setf best-so-far cur-best))
-	    (format t "===Generation ~d ===~%" (1+ g))
-	    (format t "~%best-so-far: fitness: ~a " (individual-fitness best-so-far))
-	    (princ (genotype-to-phenotype (individual-chromosome best-so-far)))
-	    (terpri)
-	    ;; fitness record
-	    (when report-fitness-record
-	      (report-fitness-changes (1+ g))))
-	  ;; terminate early
-	  (when (or (and max-evals (>= n-evals max-evals))
-		    (and stop-at-optimum
-			 (equal optimum (individual-fitness best-so-far))))
-	    (return))
-	  ;;
-	  (let ((tmp cur-pop))
-	    (setf cur-pop next-pop)
-	    (setf next-pop tmp)))
-	;;
-	(values (genotype-to-phenotype (individual-chromosome best-so-far)) best-so-far n-evals cur-pop)))))
+             (*mutation-max-height* max-tree-height)
+             (n-crossover (ceiling (* population-size p-crossover)))
+             (n-mutation (ceiling (* population-size p-mutation)))
+             (n-reproduction (max 0 (- population-size n-crossover n-mutation 1)))
+             (cur-pop (fill-all-with (make-array population-size)
+                                     (new-individual (random-parse-tree) #'tree-evaluator)))
+             (best-so-far (best-of cur-pop #'better-fitness))
+             (next-pop (make-array population-size :initial-element nil))
+             (selector (new-2tournament-selector #'better-individual))
+             (crossoveror (if report-fitness-record
+                              (add-fitness-record-crossover #'ind-crossoveror)
+                              #'ind-crossoveror))
+             (mutator (if report-fitness-record
+                          (add-fitness-record-mutation #'ind-mutator)
+                          #'ind-mutator)))
+        ;;
+        (dotimes (g generations)
+          ;; next generation
+          (let ((sel (tournament-prepare cur-pop))
+                (cur-best (best-of cur-pop #'better-fitness)))
+            (fill-with next-pop
+                       (1 cur-best)
+                       (n-crossover (funcall crossoveror (funcall selector sel) (funcall selector sel)))
+                       (n-mutation (funcall mutator (funcall selector sel)))
+                       (n-reproduction (funcall selector sel)))
+            ;; sort by fitness
+            (sort next-pop #'better-fitness)
+            ;; report
+            (if (better-fitness cur-best best-so-far) (setf best-so-far cur-best))
+            (format t "===Generation ~d ===~%" (1+ g))
+            (format t "~%best-so-far: fitness: ~a " (individual-fitness best-so-far))
+            (princ (genotype-to-phenotype (individual-chromosome best-so-far)))
+            (terpri)
+            ;; fitness record
+            (when report-fitness-record
+              (report-fitness-changes (1+ g))))
+          ;; terminate early
+          (when (or (and max-evals (>= n-evals max-evals))
+                    (and stop-at-optimum
+                         (equal optimum (individual-fitness best-so-far))))
+            (return))
+          ;;
+          (let ((tmp cur-pop))
+            (setf cur-pop next-pop)
+            (setf next-pop tmp)))
+        ;;
+        (values (genotype-to-phenotype (individual-chromosome best-so-far)) best-so-far n-evals cur-pop)))))
 
 ;;;
