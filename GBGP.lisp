@@ -11,6 +11,14 @@
 ;;; The basic form of a grammar rule is (N -> ...) where N (a symbol) represent non-terminals, and the second
 ;;; element should be the symbol ->, which is more for readability. ... are the terminals and non-terminals.
 ;;; The set of non-terminals is determined by the set of head symbol of the rules.
+
+;;; Anything in the body that is not a non-terminal is considered a
+;;; terminal. If the terminal is a list with head :run, with a general
+;;; form (:run func ...), e.g. (:run random 1.0), then it is a
+;;; generated terminal, and in expanding the body, this terminal will
+;;; be the result of applying the "func" with the rest of the list
+;;; of arguments.
+
 ;;; At the end of a grammar rule, if the keyword :action appears, it should be followed by
 ;;;   a function of two variables: the rule (object) and the list of constructed objects for its non-terminal children.
 ;;;   This function should produce a value for the parse tree node for the current rule, when converting from genotype
@@ -77,6 +85,15 @@ action: binary function of the rule object, and the list of children objects for
     (format stream ":min-height ~d ~a -> " (rule-min-height object) (non-terminal-name (rule-head object)))
     (dolist (x (rule-body object))
       (format stream "~a " (if (non-terminal-p x) (non-terminal-name x) x)))))
+
+(defstruct generated-terminal
+  "A terminal that is generated at expansion time.
+In the external grammar, the general form is (:run func ...),
+  e.g. (:run random 1.0), and the ... will be collected in a list of
+  arguments, to be used in applying the function in expansion.
+A generated terminal is regarded to have same height as other terminals."
+  func
+  args)
 
 (defun grammar-heads (g)
   "Gives the list of non-terminal symbols of the external grammar g."
@@ -184,9 +201,15 @@ Returns the possibly modified grammar G."
                (or (gethash s tab)
                    (setf (gethash s tab) (make-non-terminal :name s :rules nil :min-height 0))))
              (new-term (s)
-               (if (member s heads)
-                   (new-non-terminal s)
-                   s))
+               (cond
+                 ((member s heads) (new-non-terminal s))
+                 ((and (consp s) (eq :run (car s)))
+                  ;; generated terminal
+                  (make-generated-terminal
+                   :func (cadr s)
+                   :args (cddr s)))
+                 ;; just other simple terminal
+                 (t s)))
              (new-rule (n L act)
                ;; L is list of terminal or non-terminal, for only the rule
                ;; act is the action
@@ -234,8 +257,15 @@ children is a list of tree-node for the non-terminals, and the terminals of the 
 (defun expand-non-terminals (L expand-f)
   "L is a list of terminals (anything not non-terminal) and non-terminals (the structure). Expand only those non-terminals with expand-f, and leave the terminals unchanged, and return the list of expanded results."
   (cond ((null L) nil)
-        ((non-terminal-p (car L)) (cons (funcall expand-f (car L)) (expand-non-terminals (cdr L) expand-f)))
-        (t (cons (car L) (expand-non-terminals (cdr L) expand-f)))))
+        ((non-terminal-p (car L))
+         (cons (funcall expand-f (car L))
+               (expand-non-terminals (cdr L) expand-f)))
+        ((generated-terminal-p (car L))
+         (cons (apply (generated-terminal-func (car L))
+                      (generated-terminal-args (car L)))
+               (expand-non-terminals (cdr L) expand-f)))
+        (t (cons (car L)
+                 (expand-non-terminals (cdr L) expand-f)))))
 (defun random-expand-non-terminal (n)
   "Expand the non-terminal n, until it becomes a parse tree of terminals.
 This is dangerous, as no limit to the depth of tree of enforced, so this may cause stackoverflow."
