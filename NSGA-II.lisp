@@ -11,6 +11,10 @@
 (defpackage :simple-nsga-II
   (:use :common-lisp :simple-evolutionary-computation)
   (:nicknames :nsga2)
+  (:export
+   :NSGA-II
+   :output-pareto-front-fitness-as-csv
+   :output-pareto-front-fitness-to-csv-file)
   )
 
 (in-package :simple-nsga-II)
