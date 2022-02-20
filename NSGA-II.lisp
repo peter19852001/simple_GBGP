@@ -13,6 +13,7 @@
   (:nicknames :nsga2)
   (:export
    :NSGA-II
+   :MO-IND-IND
    :output-pareto-front-fitness-as-csv
    :output-pareto-front-fitness-to-csv-file)
   )
@@ -151,18 +152,26 @@ MO-INDIVIDUALs in INDS which is a list of MO-INDIVIDUAL"
                              (mo-fitness-obj-i (aref sort-by-obj (- i 1)) obj))
                           obj-value-range)))))))
 
-(defun NSGA-II-next-gen-parents (pop ind-dominate-p n)
+(defun NSGA-II-next-gen-parents (pop ind-dominate-p n &optional cur-gen report-func)
   "POP is a vector of (more than N) INDIVIDUAL, select N INDIVIDUAL
-according to nondomination and crowding distance."
+according to nondomination and crowding distance.
+REPORT-FUNC is the same as in NSGA-II to report the current non-dominated front for generation CUR-GEN."
   ;;(format t "At NSGA-II-next-gen-parents~%")
   ;;(population-summary pop)
   (let ((new-parents (make-array n))
-        (n-inds 0))
-    (do ((non-dom-inds (fast-non-dominated-sort pop ind-dominate-p) (cdr non-dom-inds)))
+        (n-inds 0)
+        (all-fronts (fast-non-dominated-sort pop ind-dominate-p)))
+    (when report-func
+      (funcall report-func cur-gen (car all-fronts)))
+    ;;
+    (do ((non-dom-inds all-fronts (cdr non-dom-inds)))
         ((> (+ n-inds (length (car non-dom-inds))) n)
          ;; the current front will fill-up, so take only as many as needed
          ;; all the mo-inds in the front have the same rank, so sort by decreasing crowding distance
+         (format t "Caclulate crowding distances of last front of ~A inds.~%" (length (car non-dom-inds)))
+         (finish-output)
          (crowding-distance-assignment (car non-dom-inds))
+         (format t "~A inds already filled, get the last front.~%" n-inds)
          (do ((last-front (sort (car non-dom-inds)
                                  #'> :key #'mo-ind-distance)
                           (cdr last-front)))
@@ -170,6 +179,8 @@ according to nondomination and crowding distance."
            (setf (aref new-parents n-inds) (car last-front))
            (incf n-inds)))
       ;; still not filled up yet, calculate crowding distance for later use
+      (format t "Caclulate crowding distances of ~A inds.~%" (length (car non-dom-inds)))
+      (finish-output)
       (crowding-distance-assignment (car non-dom-inds))
       ;; put the mo-inds as new parents
       (dolist (x (car non-dom-inds))
@@ -195,7 +206,8 @@ according to nondomination and crowding distance."
 				  ;; chr-printer
                   better 
 				  (p-mutation 0.05)
-                  (generations 50))
+                  (generations 50)
+                  (report-func nil))
   "The simple version of NSGA-II without constraint.
 
 POPULATION-SIZE: population size.
@@ -207,6 +219,7 @@ CHR-PRINTER: unary function to print a chromosome in a readable way.
 BETTER: a vector of binary predicate to indicate what is better for each of the multiple objectives; e.g. #'< indicates an objective should be minimized.
 P-MUTATION: probability of mutation.
 GENERATIONS: number of generations.
+REPORT-FUNC: if non-nil, should be a function of (lambda (generation mo-inds) ...) that reports the current front as appropriate.
 
 Refer to 
 Deb, K., Pratap, A., Agarwal, S., & Meyarivan, T. A. M. T. (2002). A fast and elitist multiobjective genetic algorithm: NSGA-II. IEEE transactions on evolutionary computation, 6(2), 182-197.
@@ -243,37 +256,55 @@ Deb, K., Pratap, A., Agarwal, S., & Meyarivan, T. A. M. T. (2002). A fast and el
     (let* ((ind-dominate-p (individual-dominator better))
            (cur-parents
             ;; a vector of MO-INDIVIDUALs
-            (fill-all-with (make-array population-size)
-                           (make-mo-ind :ind (new-individual
-                                              (funcall chr-init)
-                                              chr-evaluator))))
-           (non-dom-fronts (fast-non-dominated-sort cur-parents ind-dominate-p)))
+            (progn
+              (format t "Generate initial population.~%")
+              (finish-output)
+              (fill-all-with (make-array population-size)
+                             (make-mo-ind :ind (new-individual
+                                                (funcall chr-init)
+                                                chr-evaluator)))))
+           (non-dom-fronts
+            (progn
+              (format t "Calculate initial non-dominated pareto fronts.~%")
+              (finish-output)
+              (fast-non-dominated-sort cur-parents ind-dominate-p))))
       ;; initial population's handling is a little different
       ;; first get ranks and crowding distance for initial parents
+      (format t "Calculate initial crowding distances.~%")
+      (finish-output)
       (dolist (inds non-dom-fronts)
         (crowding-distance-assignment inds))
       ;;
       (dotimes (g generations)
         ;; next generation
-        (format t "Generation ~A~%" g)
+        (format t "Generation ~A~%Generate offsprings~%" g)
+        (finish-output)
         ;; first generate offsprings
         (let* ((offsprings (gen-offsprings cur-parents))
                (new-pop (concatenate 'vector
                                      cur-parents offsprings)))
+          (format t "Determine parents of next generation.~%")
+          (finish-output)
           (setf cur-parents (NSGA-II-next-gen-parents
                              new-pop
                              ind-dominate-p
-                             population-size))))
+                             population-size
+                             g report-func))))
       ;; return the non-dominated solutions.
-
+      (format t "Return the final front.~%")
       ;; now cur-parents has ranks but we have lost the fronts because
       ;; we did not keep track of them, so simply loop through it to
       ;; get the non-dominated set.
       (let ((final-non-dom nil))
-        (dotimes (i (length cur-parents) final-non-dom)
+        (dotimes (i (length cur-parents))
           (let ((p (aref cur-parents i)))
             (when (= 1 (mo-ind-rank p))
-              (push p final-non-dom)))))
+              (push p final-non-dom))))
+        ;;
+        (when report-func
+          (funcall report-func generations final-non-dom))
+        ;;
+        final-non-dom)
       )))
 
 (defun output-pareto-front-fitness-as-csv (inds)
